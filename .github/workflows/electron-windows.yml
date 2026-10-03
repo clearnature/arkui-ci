@@ -82,10 +82,24 @@ jobs:
           # 首跑实证（Linux 腿同款坑）：runner npm 的 postinstall 未下载二进制
           # （992ms 即完）——显式回退手动触发 electron 的 install.js（下载
           # dist 到 node_modules；路径分隔在 bash 下由 node 脚本自兼容）。
+          # R161 实录（Linux 502 整腿红）：install.js 内部 @electron/get 下载无
+          # 重试——预热趟 curl --retry 先落 zip，install.js 失败时直接解包兜底。
+          f="$HOME/.cache/electron-prewarm/electron-v${{ inputs.electron-version }}-win32-x64.zip"
+          if [ ! -s "$f" ]; then
+            mkdir -p "$(dirname "$f")"
+            curl -fsSL --retry 3 --retry-delay 5 -o "$f" \
+              "https://github.com/electron/electron/releases/download/v${{ inputs.electron-version }}/electron-v${{ inputs.electron-version }}-win32-x64.zip"
+          fi
           # 判定用 -f 双形态：MSYS 下 -x 对 .exe 不可靠（exec 位不映射）。
           if ! { test -f node_modules/electron/dist/electron.exe || test -f node_modules/electron/dist/electron; }; then
             echo "postinstall 未产出二进制——手动触发 install.js"
-            node node_modules/electron/install.js
+            node node_modules/electron/install.js || true
+          fi
+          if ! { test -f node_modules/electron/dist/electron.exe || test -f node_modules/electron/dist/electron; } && [ -s "$f" ]; then
+            echo "install.js 后仍缺（或其下载 5xx）——预热 zip 直接解包到 dist"
+            rm -rf node_modules/electron/dist
+            mkdir -p node_modules/electron/dist
+            unzip -q -o "$f" -d node_modules/electron/dist
           fi
           # 不做 --version 冒烟（GUI 子系统挂起风险，见文件头）——可执行性的
           # 真证据是 test-command 本身（97 用例真实时钟全靠它跑）。
