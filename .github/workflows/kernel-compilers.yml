@@ -45,12 +45,10 @@ jobs:
           # GHC 双目录（十三跑实证 ghcup store 布局：包库/rts 各自分散，命名
           # inplace 与非 inplace 并存）——按【库文件名】各自发现所在目录
           LIBDIR="$(ghc --print-libdir)"
-          PKG_DIR="$(dirname "$(find "$LIBDIR" -name 'libHSghc-internal-9.1401.0-ghc9.14.1.so' 2>/dev/null | head -1)")"
-          if [ -z "$PKG_DIR" ]; then
-            PKG_DIR="$(dirname "$(find "$LIBDIR" -name 'libHSghc-internal-9.1401.0-inplace-ghc9.14.1.so' 2>/dev/null | head -1)")"
-          fi
-          test -n "$PKG_DIR" || { echo "❌ 未找到 ghc-internal 包库"; exit 1; }
-          RTS_DIR="$(dirname "$(find "$LIBDIR" -name 'libHSrts-1.0.3-ghc9.14.1.so' 2>/dev/null | head -1)")"
+          # 通配搜索（ghcup/bindist 命名多样：inplace/e31e/无后缀等 ABI tag 并存）
+          PKG_DIR="$(dirname "$(find "$LIBDIR" /usr/local/lib/ghc-* -name 'libHSghc-internal-9.1401.0*' -type f 2>/dev/null | head -1)")"
+          test -n "$PKG_DIR" || { echo "❌ 未找到 ghc-internal 包库"; echo "  LIBDIR=$LIBDIR"; find /usr/local/lib/ghc-* /usr/local/.ghcup -name 'libHSghc*' -type f 2>/dev/null | head -5; exit 1; }
+          RTS_DIR="$(dirname "$(find "$LIBDIR" /usr/local/lib/ghc-* -name 'libHSrts-1.0.3-ghc9.14.1.so' -type f 2>/dev/null | head -1)")"
           test -n "$RTS_DIR" || RTS_DIR="$PKG_DIR"
           echo "GHC_LIB_DIR=$PKG_DIR" >> "$GITHUB_ENV"
           echo "GHC_RTS_DIR=$RTS_DIR" >> "$GITHUB_ENV"
