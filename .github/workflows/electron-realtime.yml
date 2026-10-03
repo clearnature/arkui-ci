@@ -29,10 +29,9 @@ jobs:
     name: electron (node ${{ inputs.node-version }})
     runs-on: ubuntu-24.04   # 钉 24.04：ubuntu-latest 2026-10-19 起迁 Ubuntu 26——适配另做验证切片
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        node: ["24", "26"]
+    # 不设内部 matrix：matrix.node 在 steps 里从未被消费（内部矩阵×caller 外部矩阵
+    # =纯 2×2 重复四腿，双倍分钟烧同两个结果——Windows 接线日实证），harness node
+    # 由 caller 的 inputs.node-version 决定
     env:
       NODE: node
       ELECTRON: ${{ github.workspace }}/electron/node_modules/electron/dist/electron
