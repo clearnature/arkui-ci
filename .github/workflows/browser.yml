@@ -1,0 +1,55 @@
+name: "browser · 通用浏览器矩阵执行器（Chrome headless）"
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "24"
+      setup-command:
+        description: "环境准备命令（字体/依赖等，多行 shell 可用）"
+        type: string
+        default: ""
+      test-command:
+        description: "测试入口命令（项目自带，必须以退出码表成败）"
+        type: string
+        required: true
+      artifact-path:
+        description: "失败留档 glob（空=不上传）"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: browser (node ${{ inputs.node-version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NODE: node
+      CHROME: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: 基线（Chrome 预装确认 + 字体对齐）
+        run: |
+          test -x "$CHROME" || { echo "❌ 未找到 $CHROME"; exit 1; }
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk fonts-dejavu-core
+      - name: 项目环境准备（setup-command）
+        if: inputs.setup-command != ''
+        run: ${{ inputs.setup-command }}
+      - name: 项目测试入口（test-command）
+        run: ${{ inputs.test-command }}
+      - name: 失败留档
+        if: failure() && inputs.artifact-path != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: browser-logs
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: ignore
+          retention-days: 7

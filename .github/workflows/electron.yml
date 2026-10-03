@@ -1,0 +1,59 @@
+name: "electron · 通用 Electron 真实时钟执行器（xvfb + 窗管）"
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "24"
+      electron-version:
+        description: "Electron 版本（npm 分发版）"
+        type: string
+        default: "44.2.0"
+      setup-command:
+        description: "环境准备命令（系统依赖/窗管/字体等，多行 shell 可用）"
+        type: string
+        default: ""
+      test-command:
+        description: "测试入口命令（必须以退出码表成败）"
+        type: string
+        required: true
+      artifact-path:
+        description: "失败留档 glob（空=不上传）"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  electron:
+    name: electron (node ${{ inputs.node-version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NODE: node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: 基线（xvfb + metacity 窗管 + Electron 运行库 + 字体对齐）
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb metacity libnss3 libasound2t64 libgbm1 fonts-noto-cjk fonts-dejavu-core
+      - name: 项目环境准备（setup-command）
+        if: inputs.setup-command != ''
+        run: ${{ inputs.setup-command }}
+      - name: 项目测试入口（test-command）
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: ""
+        run: ${{ inputs.test-command }}
+      - name: 失败留档
+        if: failure() && inputs.artifact-path != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: electron-logs
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: ignore
+          retention-days: 7

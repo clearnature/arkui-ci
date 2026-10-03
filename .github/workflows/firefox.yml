@@ -1,0 +1,63 @@
+name: "firefox · 通用 Firefox(Gecko) 矩阵执行器（经典 WebDriver）"
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "24"
+      setup-command:
+        description: "环境准备命令（字体/依赖/geckodriver 等，多行 shell 可用）"
+        type: string
+        default: ""
+      test-command:
+        description: "测试入口命令（必须以退出码表成败）"
+        type: string
+        required: true
+      artifact-path:
+        description: "失败留档 glob（空=不上传）"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  firefox:
+    name: firefox (node ${{ inputs.node-version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NODE: node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: 基线（Firefox 预装确认 + 字体对齐 + geckodriver）
+        run: |
+          test -x /usr/bin/firefox || { echo "❌ 未找到 /usr/bin/firefox"; exit 1; }
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk fonts-dejavu-core libnss3 libgbm1
+          if ! command -v geckodriver >/dev/null 2>&1; then
+            curl -sSL -o /tmp/geckodriver.tar.gz \
+              https://github.com/mozilla/geckodriver/releases/download/v0.36.0/geckodriver-v0.36.0-linux64.tar.gz
+            sudo tar -xzf /tmp/geckodriver.tar.gz -C /usr/local/bin
+          fi
+          firefox --version
+          geckodriver --version
+      - name: 项目环境准备（setup-command）
+        if: inputs.setup-command != ''
+        run: ${{ inputs.setup-command }}
+      - name: 项目测试入口（test-command）
+        env:
+          FF_FIREFOX: /usr/bin/firefox
+        run: ${{ inputs.test-command }}
+      - name: 失败留档
+        if: failure() && inputs.artifact-path != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: firefox-logs
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: ignore
+          retention-days: 7

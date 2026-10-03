@@ -1,0 +1,61 @@
+name: "webkit · 通用 WebKitGTK 矩阵执行器（playwright）"
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "24"
+      playwright-version:
+        description: "playwright 版本（决定 WebKitGTK 构建，建议与本地验证环境同版）"
+        type: string
+        default: "1.63.0"
+      setup-command:
+        description: "环境准备命令（字体/依赖等，多行 shell 可用）"
+        type: string
+        default: ""
+      test-command:
+        description: "测试入口命令（必须以退出码表成败）"
+        type: string
+        required: true
+      artifact-path:
+        description: "失败留档 glob（空=不上传）"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  webkit:
+    name: webkit (node ${{ inputs.node-version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NODE: node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: 基线（playwright + WebKitGTK + 字体对齐）
+        run: |
+          python3 -m pip install --user --break-system-packages playwright==${{ inputs.playwright-version }}
+          python3 -m playwright install --with-deps webkit
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk fonts-dejavu-core
+      - name: 项目环境准备（setup-command）
+        if: inputs.setup-command != ''
+        run: ${{ inputs.setup-command }}
+      - name: 项目测试入口（test-command）
+        env:
+          WK_PYTHON: python3
+        run: ${{ inputs.test-command }}
+      - name: 失败留档
+        if: failure() && inputs.artifact-path != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: webkit-logs
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: ignore
+          retention-days: 7
