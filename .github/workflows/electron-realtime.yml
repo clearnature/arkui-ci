@@ -23,9 +23,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ubuntu-electron-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   electron:

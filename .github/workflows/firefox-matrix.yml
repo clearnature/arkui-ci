@@ -18,9 +18,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ubuntu-firefox-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   firefox:
