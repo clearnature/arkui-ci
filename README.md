@@ -16,7 +16,8 @@ runner 环境 + 治理语义（两级门/留档/并发）】，项目差异全�
 
 | 文件 | 引擎 | 关键 inputs |
 |---|---|---|
-| `browser.yml` | Chrome headless | setup-command / test-command |
+| `browser.yml` | Chrome headless（Linux · ubuntu-24.04） | setup-command / test-command |
+| `browser-windows.yml` | Chrome headless（Windows · windows-latest · Git Bash） | 同 browser.yml（inputs 完全同构） |
 | `firefox.yml` | Firefox 经典 WebDriver | 同上 |
 | `webkit.yml` | WebKitGTK（playwright，版本可钉） | 同上 + playwright-version |
 | `electron.yml` | Electron 真实时钟（xvfb + metacity） | 同上 + electron-version |

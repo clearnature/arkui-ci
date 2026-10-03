@@ -66,6 +66,13 @@ ghcup/bindist 安装的 GHC 包库文件名含发行特有的 ABI tag
 2026-10-19 迁 Ubuntu 26——26 的适配（包名/预装变化）作为独立验证切片，
 验证绿之前不随 latest 漂移。
 
+Windows 腿（`browser-windows.yml`）用 `windows-latest`：Chrome 依赖
+runner 镜像预装（`C:\Program Files\Google\Chrome\Application\chrome.exe`），
+预装路径跨镜像版本稳定，钉版收益低。**计费 2×**（Windows runner 分钟
+系数 2），只承接确需 Windows 覆盖的腿。**shell 纪律**：job 级
+`defaults: { run: { shell: bash } }`，所有 run 步骤走 Git Bash——
+项目注入的 setup/test 命令同样按 bash 语义书写，严禁依赖 PowerShell。
+
 ## 7. 标签语义
 
 | 标签 | 语义 |

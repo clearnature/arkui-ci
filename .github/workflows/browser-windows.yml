@@ -1,0 +1,78 @@
+# windows · Chrome headless 通用浏览器矩阵执行器
+#
+# 为什么单独一个文件（不并入 browser.yml）：两平台的基线步骤不可合流——
+# Linux 腿要 apt-get 装 CJK/DejaVu 字体并校验 /usr/bin/google-chrome 的可执行位；
+# Windows runner 镜像预装 Chrome 且自带字族（本矩阵断言基于 DOM/文本，
+# 不依赖字形度量，无需字体对齐）。若塞进同一文件必须以 if/else 按
+# runner.os 分叉每个基线步骤，违背「一屏读完」的可读性纪律——平行文件
+# 让两条腿各自保持零分支。
+#
+# Windows 预装 Chrome 依据：GitHub Actions windows runner 镜像
+# （windows-latest / windows-2022）自带 Google Chrome stable，固定路径
+# C:\Program Files\Google\Chrome\Application\chrome.exe——不下载、不入缓存，
+# 只做存在性确认。
+#
+# shell 纪律：job 级 defaults.run.shell=bash，所有 run 步骤走 Git Bash；
+# 路径含空格（Program Files）时一律经 env 引用（"$CHROME"），勿在 run
+# 里裸写反斜杠路径。inputs 与 browser.yml 完全同构，两腿可平行委托。
+
+name: "browser-windows · 通用浏览器矩阵执行器（Windows · Chrome headless）"
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "24"
+      setup-command:
+        description: "环境准备命令（多行 shell 可用，Git Bash 语义）"
+        type: string
+        default: ""
+      test-command:
+        description: "测试入口命令（项目自带，必须以退出码表成败）"
+        type: string
+        required: true
+      artifact-path:
+        description: "失败留档 glob（空=不上传）"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  browser-windows:
+    name: browser-windows (node ${{ inputs.node-version }})
+    runs-on: windows-latest
+    timeout-minutes: 90   # Windows runner 启动/结算更慢，较 Linux 腿（60）放宽
+    defaults:
+      run:
+        shell: bash
+    env:
+      NODE: node
+      CHROME: C:\Program Files\Google\Chrome\Application\chrome.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: 基线（Windows runner Chrome 预装确认）
+        run: |
+          # Git Bash/MSYS 下 .exe 的 -x 判定不可靠（exec 位不映射），
+          # 用 -f 验「固定路径存在」，再直接调用 --version 验「可执行」——
+          # 调用成功是比权限位更强的端到端证据。
+          test -f "$CHROME" || { echo "❌ 未找到 $CHROME（runner 镜像应预装）"; exit 1; }
+          "$CHROME" --version
+      - name: 项目环境准备（setup-command）
+        if: inputs.setup-command != ''
+        run: ${{ inputs.setup-command }}
+      - name: 项目测试入口（test-command）
+        run: ${{ inputs.test-command }}
+      - name: 失败留档
+        if: failure() && inputs.artifact-path != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: browser-windows-logs
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: ignore
+          retention-days: 7
