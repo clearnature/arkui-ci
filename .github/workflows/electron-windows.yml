@@ -1,0 +1,109 @@
+# windows · Electron 真实时钟通用执行器（无 xvfb——Windows 真实显示栈）
+#
+# 为什么单独一个文件（不并入 electron.yml）：两平台的基线步骤不可合流——
+# Linux 腿要 apt 装 xvfb + metacity 窗管 + CJK/DejaVu 字体 + libnss3/
+# libasound2t64/libgbm1 运行库；Windows 腿全不用：真实显示栈（DWM 即真实
+# 窗管，fullscreen/maximize 语义原生成立）、字族系统自带（微软雅黑等）、
+# Windows 版 Electron 自包含全部 DLL。libnss3/libasound2/libgbm1 段的
+# Windows 等价说明：无等价物也不需要——那些是 Linux 共享库依赖，Windows
+# 的 Electron 发行包把运行库全部自带，无任何系统包要装。若塞进同一文件
+# 必须以 if/else 按 runner.os 分叉每个基线步骤，违背「一屏读完」的零分支
+# 纪律——平行文件让两条腿各自保持零分支（同 browser-windows.yml 裁定）。
+#
+# xvfb 段的 Windows 等价说明：无等价物也无需等价物——Linux 上 xvfb/metacity
+# 是「模拟真实显示」的垫片（xvfb 供 X11、metacity 补窗管语义），Windows
+# 本身就是真实显示。疑点照记（PLAN-WINDOWS-CI.md W2-1）：ARKUI_OFFSCREEN=1
+# 的 paint 帧截图在 Win 的行为待首跑验证，真实时钟 97 用例口径不变。
+#
+# Electron 安装：npm 分发版 electron@${{ inputs.electron-version }}（默认
+# 44.2.0，与本地 electron/runtime/ 解包版一致）+ postinstall 未产出二进制时
+# 手动触发 install.js（Linux 首跑实证：runner npm 的 postinstall 992ms 即完
+# 未下载二进制；bash 下 node 脚本对 win32 路径分隔自兼容）。**无版本冒烟**：
+# 不调 electron.exe --version——Windows GUI 子系统下无输出且可能不退出
+# （一期实录：chrome.exe --version 挂 18min，治理 PR#2 同裁定），只留文件
+# 存在检查；判定用 -f 双形态（electron.exe 优先，无扩展名形态兜底）——
+# MSYS 下 -x 对 .exe 不可靠（exec 位不映射）。
+#
+# shell 纪律：job 级 defaults.run.shell=bash（GOVERNANCE §6），路径含空格
+# 一律经 env 引用。inputs 与 electron.yml 完全同构，两腿可平行委托。
+# 计费：Windows runner 分钟系数 2×（GOVERNANCE §6）——caller 先单 node 版本。
+
+name: "electron-windows · 通用 Electron 真实时钟执行器（Windows · 无 xvfb）"
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "24"
+      electron-version:
+        description: "Electron 版本（npm 分发版）"
+        type: string
+        default: "44.2.0"
+      setup-command:
+        description: "环境准备命令（多行 shell 可用，Git Bash 语义）"
+        type: string
+        default: ""
+      test-command:
+        description: "测试入口命令（项目自带，必须以退出码表成败）"
+        type: string
+        required: true
+      artifact-path:
+        description: "失败留档 glob（空=不上传）"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  electron-windows:
+    name: electron-windows (node ${{ inputs.node-version }})
+    runs-on: windows-latest
+    timeout-minutes: 90   # Windows runner 启动/结算更慢，较 Linux 腿（60）放宽
+    defaults:
+      run:
+        shell: bash
+    env:
+      NODE: node
+      PYTHON: python   # windows runner 不保证 python3 命令名（一期实录：python 必有）
+      ELECTRON: ${{ github.workspace }}/electron/node_modules/electron/dist/electron.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: 基线（无系统运行库段——自包含）+ 安装 Electron
+        run: |
+          # 基线即安装：Windows 无 xvfb/metacity/字体/运行库段（见文件头说明），
+          # Electron 二进制是唯一要就位的依赖。
+          cd electron
+          npm install --no-save electron@${{ inputs.electron-version }}
+          # 首跑实证（Linux 腿同款坑）：runner npm 的 postinstall 未下载二进制
+          # （992ms 即完）——显式回退手动触发 electron 的 install.js（下载
+          # dist 到 node_modules；路径分隔在 bash 下由 node 脚本自兼容）。
+          # 判定用 -f 双形态：MSYS 下 -x 对 .exe 不可靠（exec 位不映射）。
+          if ! { test -f node_modules/electron/dist/electron.exe || test -f node_modules/electron/dist/electron; }; then
+            echo "postinstall 未产出二进制——手动触发 install.js"
+            node node_modules/electron/install.js
+          fi
+          # 不做 --version 冒烟（GUI 子系统挂起风险，见文件头）——可执行性的
+          # 真证据是 test-command 本身（97 用例真实时钟全靠它跑）。
+          test -f node_modules/electron/dist/electron.exe || test -f node_modules/electron/dist/electron \
+            || { echo "❌ electron 二进制未就位"; exit 1; }
+          ls -lh node_modules/electron/dist/electron.exe node_modules/electron/dist/electron 2>/dev/null || true
+      - name: 项目环境准备（setup-command）
+        if: inputs.setup-command != ''
+        run: ${{ inputs.setup-command }}
+      - name: 项目测试入口（test-command）
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: ""
+        run: ${{ inputs.test-command }}
+      - name: 失败留档
+        if: failure() && inputs.artifact-path != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: electron-windows-logs
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: ignore
+          retention-days: 7

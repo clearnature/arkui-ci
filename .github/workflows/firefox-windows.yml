@@ -1,0 +1,97 @@
+# windows · Firefox(Gecko) 通用矩阵执行器（经典 WebDriver）
+#
+# 为什么单独一个文件（不并入 firefox.yml）：两平台的基线步骤不可合流——
+# Linux 腿校验 /usr/bin/firefox + apt 装字体/运行库 + geckodriver tar 包直落
+# /usr/local/bin；Windows 腿三处全不同：①Firefox 由 runner 镜像预装在
+# C:\Program Files\Mozilla Firefox\firefox.exe（只做存在性确认，不入缓存）；
+# ②geckodriver windows runner **不预装**——同版同源换资产名直下（Linux 腿用
+# mozilla/geckodriver GitHub Releases v0.36.0 linux64.tar.gz，此处同版本
+# v0.36.0 win64.zip；不换 apt 是因为 Linux 腿本就不走 apt，geckodriver 不在
+# Ubuntu 源里）；③字体不用装（微软雅黑等系统自带，断言基于 DOM/文本而非
+# 字形度量）。geckodriver 落点 $HOME/.local/bin：写 /usr/local/bin 在 Windows
+# 是 Git 安装目录（需提权，不可行）；项目 firefox/run.sh 的 geckodriver 探测
+# 链（FF_GECKODRIVER → PATH → ~/.local/bin）两头都接得住。
+#
+# GUI 冒烟纪律（一期实录）：firefox.exe 是 GUI 子系统程序，--version 无输出
+# 且可能不退出（chrome.exe --version 挂 18min 同族坑）——只做 -f 存在性检查；
+# geckodriver.exe 是 console 子系统程序，--version 打印即退，冒烟安全保留。
+#
+# shell 纪律：job 级 defaults.run.shell=bash（GOVERNANCE §6），路径含空格
+# 一律经 env 引用（"$FF_FIREFOX"）。inputs 与 firefox.yml 完全同构，两腿可
+# 平行委托。计费：Windows runner 分钟系数 2×（GOVERNANCE §6）——caller 先
+# 单 node 版本。
+
+name: "firefox-windows · 通用 Firefox WebDriver 执行器（Windows）"
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "24"
+      setup-command:
+        description: "环境准备命令（依赖/geckodriver 等，多行 shell 可用，Git Bash 语义）"
+        type: string
+        default: ""
+      test-command:
+        description: "测试入口命令（必须以退出码表成败）"
+        type: string
+        required: true
+      artifact-path:
+        description: "失败留档 glob（空=不上传）"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  firefox-windows:
+    name: firefox-windows (node ${{ inputs.node-version }})
+    runs-on: windows-latest
+    timeout-minutes: 90   # Windows runner 启动/结算更慢，较 Linux 腿（60）放宽
+    defaults:
+      run:
+        shell: bash
+    env:
+      NODE: node
+      PYTHON: python   # windows runner 不保证 python3 命令名（一期实录：python 必有）
+      FF_FIREFOX: C:\Program Files\Mozilla Firefox\firefox.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: 基线（Firefox 预装确认 + geckodriver 下载）
+        run: |
+          # ① Firefox 预装确认：Git Bash/MSYS 下 .exe 的 -x 判定不可靠（exec 位
+          # 不映射），用 -f 验存在；不调 firefox --version（GUI 子系统，见文件头）。
+          test -f "/c/Program Files/Mozilla Firefox/firefox.exe" \
+            || { echo "❌ 未找到 /c/Program Files/Mozilla Firefox/firefox.exe（runner 镜像应预装）"; exit 1; }
+          # ② geckodriver：windows runner 不预装——GitHub Releases 直下 win64
+          #（版本钉死 v0.36.0，与 firefox.yml Linux 腿同版同源）。
+          mkdir -p "$HOME/.local/bin"
+          curl -sSL -o /tmp/geckodriver.zip \
+            https://github.com/mozilla/geckodriver/releases/download/v0.36.0/geckodriver-v0.36.0-win64.zip
+          # Git Bash 无 unzip；用 python zipfile 解（免 tar/unzip 猜谜，python 必有）。
+          python -m zipfile -e /tmp/geckodriver.zip "$HOME/.local/bin/"
+          chmod +x "$HOME/.local/bin/geckodriver.exe"
+          # PATH 追加：GITHUB_PATH 由 runner 按 Windows PATH 语义拼接，须写
+          # cygpath -w 形态（后续步骤的 MSYS bash 会自动转回 POSIX 形态）；
+          # 项目 run.sh 的 ~/.local/bin 探测链另有一层兜底。
+          cygpath -w "$HOME/.local/bin" >> "$GITHUB_PATH"
+          # console 子系统程序，--version 打印即退——冒烟安全（区别于 firefox.exe）。
+          "$HOME/.local/bin/geckodriver.exe" --version
+      - name: 项目环境准备（setup-command）
+        if: inputs.setup-command != ''
+        run: ${{ inputs.setup-command }}
+      - name: 项目测试入口（test-command）
+        run: ${{ inputs.test-command }}
+      - name: 失败留档
+        if: failure() && inputs.artifact-path != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: firefox-windows-logs
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: ignore
+          retention-days: 7
