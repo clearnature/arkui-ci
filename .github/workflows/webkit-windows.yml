@@ -1,0 +1,94 @@
+# windows · WebKit 通用矩阵执行器（playwright 口味）
+#
+# **语义口径（记档先行，PLAN-WINDOWS-CI.md 二期轮廓 W2-3 原裁定）**：
+# 「playwright Win WebKit——语义口径=第三种 WebKit（非 GTK 移植），覆盖不与
+# Linux WebKitGTK 划等号，记档先行。」playwright 在 Windows 上分发的 WebKit
+# 是 Win32 独立口味（Apple 的 Win32 port 基座，非 Linux 腿的 WebKitGTK
+# 移植）——本腿与 webkit.yml 的覆盖是**两种不同 WebKit**，断言差异按引擎
+# 差异纪律处理，不得互相推导或互相豁免。
+#
+# 为什么单独一个文件（不并入 webkit.yml）：两平台的基线步骤不可合流——
+# Linux 腿要 --break-system-packages（PEP 668 的 Debian/Ubuntu externally-
+# managed 标记）+ playwright install --with-deps（apt 系统依赖段）+ CJK/
+# DejaVu 字体对齐；Windows 腿三处全不用：PEP 668 不适用（windows runner 的
+# python 无 externally-managed 标记，直接 pip 装）、--with-deps 是 Linux 专属
+# （Windows 版 playwright 自带全部运行时依赖，须去掉该旗标）、字族系统自带
+# （微软雅黑等）。若塞进同一文件必须以 if/else 按 runner.os 分叉每个基线
+# 步骤，违背「一屏读完」的零分支纪律——平行文件让两条腿各自保持零分支
+# （同 browser-windows.yml 裁定）。
+#
+# 项目侧适配提示：webkit/run.sh 的 WK_PYTHON 探测链已参数化（本工作流经
+# env 透传 python）；run.sh 里尚存的 python3 裸调用点属项目仓（Agent A/
+# 主会话）所有权，Windows 接线前须按 PYTHON 参数化——工作流侧不做遮盖。
+#
+# shell 纪律：job 级 defaults.run.shell=bash（GOVERNANCE §6）。inputs 与
+# webkit.yml 完全同构（playwright-version 在 Windows 决定的是 Win32 口味
+# 构建，非 WebKitGTK）。计费：Windows runner 分钟系数 2×（GOVERNANCE §6）
+# ——caller 先单 node 版本。
+
+name: "webkit-windows · 通用 WebKit 执行器（Windows · playwright 口味）"
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "24"
+      playwright-version:
+        description: "playwright 版本（Windows 上决定 Win32 口味 WebKit 构建，建议与本地验证环境同版）"
+        type: string
+        default: "1.63.0"
+      setup-command:
+        description: "环境准备命令（依赖等，多行 shell 可用，Git Bash 语义）"
+        type: string
+        default: ""
+      test-command:
+        description: "测试入口命令（必须以退出码表成败）"
+        type: string
+        required: true
+      artifact-path:
+        description: "失败留档 glob（空=不上传）"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  webkit-windows:
+    name: webkit-windows (node ${{ inputs.node-version }})
+    runs-on: windows-latest
+    timeout-minutes: 90   # Windows runner 启动/结算更慢，较 Linux 腿（60）放宽
+    defaults:
+      run:
+        shell: bash
+    env:
+      NODE: node
+      PYTHON: python   # windows runner 不保证 python3 命令名（一期实录：python 必有）
+      WK_PYTHON: python   # webkit/run.sh 的探测链首选项：有 playwright 的 python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: 基线（playwright + Win32 口味 WebKit；无系统依赖段/字体段）
+        run: |
+          # python -m pip（Windows 用法）；无 --user/--break-system-packages——
+          # PEP 668 是 Debian/Ubuntu 标记，windows runner 不适用，直接装。
+          python -m pip install playwright==${{ inputs.playwright-version }}
+          # 无 --with-deps：那是 apt 系统依赖段（Linux 专属旗标）——Windows 版
+          # playwright 自带全部运行时依赖。无字体段：Windows 自带字族。
+          python -m playwright install webkit
+      - name: 项目环境准备（setup-command）
+        if: inputs.setup-command != ''
+        run: ${{ inputs.setup-command }}
+      - name: 项目测试入口（test-command）
+        run: ${{ inputs.test-command }}
+      - name: 失败留档
+        if: failure() && inputs.artifact-path != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: webkit-windows-logs
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: ignore
+          retention-days: 7
