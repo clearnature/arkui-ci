@@ -1,0 +1,52 @@
+name: "nodejs · Chrome 浏览器全矩阵（虚拟时间）"
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "24"
+      virtual-time-skip:
+        description: "虚拟时间豁免清单（空格分隔用例名；真实解码/时序页跳过，权威=真实时钟端）"
+        type: string
+        default: "builtindemo imageext measimage"
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: browser (node ${{ inputs.node-version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NODE: node
+      CHROME: /usr/bin/google-chrome
+      ARKUI_CHROME_DEBUG: "0"
+      ARKUI_VIRTUAL_TIME_SKIP: ${{ inputs.virtual-time-skip }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: 系统依赖（字体对齐——textmeasure 度量按本地字体冻结）
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk fonts-dejavu-core
+      - name: Chrome 就位确认（runner 预装，缺席即刻显式失败）
+        run: |
+          test -x "$CHROME" || { echo "❌ 未找到 $CHROME（ubuntu runner 应预装 Google Chrome）"; exit 1; }
+          "$CHROME" --version
+          node --version
+      - name: run.sh all（85 用例 + 断言计数守门）
+        run: bash run.sh all
+      - name: 失败留档（截图 + 计数表）
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: browser-logs-node${{ inputs.node-version }}
+          path: |
+            build/*.png
+            build/assert-counts-browser.tsv
+          if-no-files-found: ignore
+          retention-days: 7

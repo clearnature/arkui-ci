@@ -1,0 +1,69 @@
+name: "kernel · 五语言编译器（源码 → .so → 统一契约 5/5）"
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+jobs:
+  compilers:
+    name: gcc / go1.26 / rust-stable / ghc-9.14.1 / cjc-nightly
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26"
+
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
+        with:
+          toolchain: stable
+
+      # GHC 安装器=代码仓同款（GHCUP_INSTALL_BASE_PREFIX=/usr/local → 布局与
+      # 本地一致，契约默认路径直接命中）
+      - uses: haskell/ghcup-setup@d803e6bf19ae60755bc6ac073b6e3929dad3eac2
+        with:
+          ghc: 9.14.1
+        env:
+          GHCUP_INSTALL_BASE_PREFIX: /usr/local
+
+      - name: Setup Cangjie（nightly 1.3.0-alpha，与本地同版本号）
+        uses: Zxilly/setup-cangjie@91463316b1c359f216c2ac49e35900f9341c1571
+        with:
+          channel: nightly
+          version: 1.3.0-alpha.20260919003053
+
+      - name: 运行时库路径发现（GHC 包库 / RTS 双目录 + 仓颉运行时）
+        run: |
+          CJ_RT="$(find "$HOME" /opt /usr/local -type d -name 'linux_x86_64_cjnative' 2>/dev/null | head -1)"
+          test -n "$CJ_RT" || { echo "❌ 未找到仓颉运行时目录（linux_x86_64_cjnative）"; exit 1; }
+          echo "CANGJIE_RT_LIB=$CJ_RT" >> "$GITHUB_ENV"
+          echo "CANGJIE_RT_LIB=$CJ_RT"
+          # GHC 双目录（十三跑实证 ghcup store 布局：包库/rts 各自分散，命名
+          # inplace 与非 inplace 并存）——按【库文件名】各自发现所在目录
+          LIBDIR="$(ghc --print-libdir)"
+          PKG_DIR="$(dirname "$(find "$LIBDIR" -name 'libHSghc-internal-9.1401.0-ghc9.14.1.so' 2>/dev/null | head -1)")"
+          if [ -z "$PKG_DIR" ]; then
+            PKG_DIR="$(dirname "$(find "$LIBDIR" -name 'libHSghc-internal-9.1401.0-inplace-ghc9.14.1.so' 2>/dev/null | head -1)")"
+          fi
+          test -n "$PKG_DIR" || { echo "❌ 未找到 ghc-internal 包库"; exit 1; }
+          RTS_DIR="$(dirname "$(find "$LIBDIR" -name 'libHSrts-1.0.3-ghc9.14.1.so' 2>/dev/null | head -1)")"
+          test -n "$RTS_DIR" || RTS_DIR="$PKG_DIR"
+          echo "GHC_LIB_DIR=$PKG_DIR" >> "$GITHUB_ENV"
+          echo "GHC_RTS_DIR=$RTS_DIR" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$RTS_DIR:$PKG_DIR:$LIBDIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          echo "PKG=$PKG_DIR | RTS=$RTS_DIR"
+
+      - name: 五语言编译（源码 → .so，任一失败即红）
+        run: |
+          bash kernel/c-sample/build.sh
+          bash kernel/go/build.sh
+          bash kernel/rust/build.sh
+          bash kernel/hs/build.sh
+          bash kernel/cangjie/build.sh
+
+      - name: 统一契约（41 断言 × 5 = 5/5，退出码=守门）
+        run: bash kernel/run-contract.sh all

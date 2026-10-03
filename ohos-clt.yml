@@ -1,0 +1,83 @@
+name: "ohos · HarmonyOS CLT 编译 + AOT + 漂移守门"
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+jobs:
+  ohos-toolchain:
+    name: ohos-toolchain (CLT 26.0.0.821)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SDK 缓存恢复（actions/cache@v5 自管，消 Node20 废弃警告）
+        uses: actions/cache@v5
+        with:
+          path: /home/runner/ohos-sdk
+          key: ohos-sdk-26.0.0.821-linux-amd64-v1
+
+      - name: Setup HarmonyOS NEXT CLI tools（锁 26.0.0.821=本地同版本）
+        uses: ErBWs/setup-ohos@4dbb63025116eb6165ceac58a4bf47cbdc5ac721
+        with:
+          version: 26.0.0.821
+          cache: false
+
+      - name: 安装 Linux 依赖（libGL1 纹理压缩 + minizip/unzip 供 AOT 步）
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgl1-mesa-dev libminizip1 unzip
+
+      - name: CLT 就位确认
+        run: |
+          echo "HOS_SDK_HOME=$HOS_SDK_HOME"
+          hvigorw -v
+          echo "CLT_ROOT=$(dirname "$HOS_SDK_HOME")" >> "$GITHUB_ENV"
+
+      - name: hvigorw 全量编译冒烟（BUILD SUCCESSFUL 判定）
+        run: |
+          export DEVECO_CLI_CLT_PATH="$CLT_ROOT"
+          unset DEVECO_NODE_HOME
+          (cd harmony-proj && "$DEVECO_CLI_CLT_PATH/bin/hvigorw" --no-daemon assembleHap)
+
+      - name: fixtures 漂移检查（app 资源 id 归一化后逐字节 diff，硬拦截）
+        run: |
+          export DEVECO_CLI_CLT_PATH="$CLT_ROOT"
+          CACHE="harmony-proj/entry/build/default/cache/default/default@CompileArkTS/esmodule/debug/entry/src/main/ets"
+          norm() { sed -E 's/"id": ?16777[0-9]{3}/"id": _APP_RES_ID_/g' "$1"; }
+          fail=0; drifted=0; checked=0
+          while IFS= read -r rel; do
+            f="fixtures/$rel"
+            [ -f "$f" ] || continue
+            checked=$((checked+1))
+            if ! diff -u <(norm "$CACHE/$rel") <(norm "$f") > /tmp/driftpatch.txt 2>&1; then
+              echo "❌ 漂移：$rel"; head -20 /tmp/driftpatch.txt; fail=1; drifted=$((drifted+1))
+            fi
+          done < <(python3 -c "import json,glob; pages=json.load(open('harmony-proj/entry/src/main/resources/base/profile/main_pages.json'))['src']; [print('pages/'+p.split('/')[-1]+'.ts') for p in pages]; [print('entryability/'+a.split('/')[-1]) for a in sorted(glob.glob('fixtures/entryability/*.ts'))]")
+          echo "── 检查 $checked 个登记产物，漂移 $drifted ──"
+          exit $fail
+
+      - name: gen-components --check（149 组件骨架生成一致性）
+        env:
+          DEVECO_CLI_CLT_PATH: ${{ env.CLT_ROOT }}
+        run: node tools/gen-components.mjs --check
+
+      - name: AOT 静态编译检查（arkts-shim 就地重建：modules.abc → .an 原生码）
+        run: |
+          ARKBIN="$CLT_ROOT/sdk/default/openharmony/ets/build-tools/ets-loader/bin/ark/build/bin"
+          SHIM="$RUNNER_TEMP/arkts-shim"
+          mkdir -p "$SHIM"
+          test -f tools/arkts-shim/shim.c || { echo "❌ 缺 tools/arkts-shim/shim.c"; exit 1; }
+          cp "$ARKBIN/libhilog_linux.so" "$SHIM/libhilog.so"
+          gcc -shared -fPIC -o "$SHIM/libshared_libz.so" tools/arkts-shim/shim.c \
+            -Wl,--no-as-needed -l:libz.so.1 -l:libminizip.so.1
+          unzip -o -q harmony-proj/entry/build/default/outputs/default/entry-default-unsigned.hap \
+            'ets/modules.abc' -d "$RUNNER_TEMP/hap"
+          export LD_LIBRARY_PATH="$SHIM:$ARKBIN${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          "$ARKBIN/ark_aot_compiler" --aot-file="$RUNNER_TEMP/out" "$RUNNER_TEMP/hap/ets/modules.abc"
+          test -s "$RUNNER_TEMP/out.an"
+          file "$RUNNER_TEMP/out.an" | grep -q ELF
+          echo "✅ AOT 静态编译：modules.abc → 原生码 ELF"

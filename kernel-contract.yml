@@ -1,0 +1,34 @@
+name: "kernel · 内核运行时契约（冻结 .so 直载）"
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "24"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: contract (node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["24", "26"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: 内核 .so 在位确认
+        run: |
+          for k in c-sample/libkernel_c.so go/libkernel_go.so rust/libkernel_rs.so; do
+            test -s "kernel/$k" || { echo "❌ 缺 kernel/$k"; exit 1; }
+          done
+          echo "✅ 直载内核 .so 齐备（cangjie/hs 运行时 SKIP 留痕属预期）"
+      - name: 内核统一契约（41 断言 × c/go/rs 直载；cangjie/hs SKIP 留痕；退出码=守门）
+        run: bash kernel/run-contract.sh all
