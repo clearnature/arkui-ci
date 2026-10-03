@@ -52,15 +52,28 @@ jobs:
           # metacity：xvfb 无窗管时 Electron fullscreen/maximize 语义缺失（九跑实证）；
           #   openbox 的 restore 不还原宽度（十六跑实证）——GNOME 系 metacity 与本地一致
           sudo apt-get install -y -qq fonts-noto-cjk fonts-dejavu-core metacity libnss3 libasound2t64 libgbm1 xvfb
-      - name: 安装 Electron 44.2.0（与本地 electron/runtime/ 同版本）
+      - name: 安装 Electron 44.2.0（与本地 electron/runtime/ 同版本；zip 带重试）
         run: |
           cd electron
           npm install --no-save electron@44.2.0
-          # 首跑实证：runner npm 的 postinstall 未下载二进制（992ms 即完）——
-          # 显式回退手动触发 electron 的 install.js（下载 dist 到 node_modules）
+          # R161 实录：install.js 内部走 @electron/get 下载无重试——GitHub Releases
+          # 一次 502 整腿即红（CI electron node26 实锤）。预热趟 curl --retry 先落
+          # zip；install.js 失败时直接解包（zip 布局=dist 根，与 install.js 同产物）。
+          f="$HOME/.cache/electron-prewarm/electron-v44.2.0-linux-x64.zip"
+          if [ ! -s "$f" ]; then
+            mkdir -p "$(dirname "$f")"
+            curl -fsSL --retry 3 --retry-delay 5 -o "$f" \
+              https://github.com/electron/electron/releases/download/v44.2.0/electron-v44.2.0-linux-x64.zip
+          fi
           if [ ! -x node_modules/electron/dist/electron ]; then
             echo "postinstall 未产出二进制——手动触发 install.js"
-            node node_modules/electron/install.js
+            node node_modules/electron/install.js || true
+          fi
+          if [ ! -x node_modules/electron/dist/electron ] && [ -s "$f" ]; then
+            echo "install.js 后仍缺（或其下载 5xx）——预热 zip 直接解包到 dist"
+            rm -rf node_modules/electron/dist
+            mkdir -p node_modules/electron/dist
+            unzip -q -o "$f" -d node_modules/electron/dist
           fi
           test -x node_modules/electron/dist/electron || { echo "❌ electron 二进制未就位"; exit 1; }
           # --no-sandbox 必带：runner 上 chrome-sandbox 非 root:4755 会 FATAL（run.sh 同款）
