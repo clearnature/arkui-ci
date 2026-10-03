@@ -58,11 +58,12 @@ jobs:
           node-version: ${{ inputs.node-version }}
       - name: 基线（Windows runner Chrome 预装确认）
         run: |
-          # Git Bash/MSYS 下 .exe 的 -x 判定不可靠（exec 位不映射），
-          # 用 -f 验「固定路径存在」，再直接调用 --version 验「可执行」——
-          # 调用成功是比权限位更强的端到端证据。
+          # Git Bash/MSYS 下 .exe 的 -x 判定不可靠（exec 位不映射），用 -f 验存在。
+          # 不调 chrome.exe --version：Windows GUI 子系统下无输出且可能不退出
+          # （Windows 首跑实证：基线步骤挂 18min）——可执行性的真证据是
+          # test-command 本身（80 页矩阵全靠它跑）。
           test -f "$CHROME" || { echo "❌ 未找到 $CHROME（runner 镜像应预装）"; exit 1; }
-          "$CHROME" --version
+          ls -lh "$CHROME"
       - name: 项目环境准备（setup-command）
         if: inputs.setup-command != ''
         run: ${{ inputs.setup-command }}
