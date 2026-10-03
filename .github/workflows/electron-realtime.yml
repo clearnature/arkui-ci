@@ -16,6 +16,11 @@ name: "ubuntu · Electron 44（真实时钟 · 97 用例 + 断言计数守门）
 on:
   workflow_call:
     inputs:
+      # runner 镜像（U26 迁移机制：默认钉 24.04 行为不变；caller 显式传
+      # ubuntu-26.04 逐腿迁移——探针实测见代码仓 ubuntu26-probe.yml）
+      runner:
+        type: string
+        default: "ubuntu-24.04"
       node-version:
         type: string
         default: "24"
@@ -27,7 +32,7 @@ permissions:
 jobs:
   electron:
     name: electron (node ${{ inputs.node-version }})
-    runs-on: ubuntu-24.04   # 钉 24.04：ubuntu-latest 2026-10-19 起迁 Ubuntu 26——适配另做验证切片
+    runs-on: ${{ inputs.runner }}   # 默认 24.04（U26 迁移经 caller runner input 逐腿切）
     timeout-minutes: 60
     # 不设内部 matrix：matrix.node 在 steps 里从未被消费（内部矩阵×caller 外部矩阵
     # =纯 2×2 重复四腿，双倍分钟烧同两个结果——Windows 接线日实证），harness node
