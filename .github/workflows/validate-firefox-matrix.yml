@@ -1,0 +1,15 @@
+# 临时校验器：验证 firefox-matrix reusable 定义可被 GitHub 解析（验证后删除）
+name: "validate · firefox-matrix"
+on:
+  workflow_dispatch:
+    inputs:
+      node-version:
+        type: string
+        default: "24"
+permissions:
+  contents: read
+jobs:
+  validate:
+    uses: ./.github/workflows/firefox-matrix.yml
+    with:
+      node-version: ${{ inputs.node-version }}
