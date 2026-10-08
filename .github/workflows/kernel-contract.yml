@@ -3,11 +3,11 @@ name: "kernel · 内核运行时契约（冻结 .so 直载）"
 on:
   workflow_call:
     inputs:
-      # runner 镜像（U26 迁移完成 2026-10-08：默认钉 26.04——caller 显式传参
-      # 可逐腿覆盖；探针/六腿验证见代码仓 ubuntu26-probe/ubuntu26-validate）
+      # runner 镜像（U26 迁移机制：默认钉 24.04 行为不变；caller 显式传
+      # ubuntu-26.04 逐腿迁移——探针实测见代码仓 ubuntu26-probe.yml）
       runner:
         type: string
-        default: "ubuntu-26.04"
+        default: "ubuntu-24.04"
       node-version:
         type: string
         default: "24"
@@ -18,7 +18,7 @@ permissions:
 jobs:
   contract:
     name: contract (node ${{ inputs.node-version }})
-    runs-on: ${{ inputs.runner }}   # 默认 26.04（U26 迁移完成 2026-10-08；caller runner input 可逐腿覆盖）
+    runs-on: ${{ inputs.runner }}   # 默认 24.04（U26 迁移经 caller runner input 逐腿切）
     timeout-minutes: 15
     # 不设内部 matrix：matrix.node 从未被消费（setup-node 吃的是 inputs.node-version，
     # 两腿逐字节相同白烧一条——electron-realtime 同病 PR#3 先例）；kernel 契约对

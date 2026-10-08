@@ -3,11 +3,11 @@ name: "firefox · 通用 Firefox(Gecko) 矩阵执行器（经典 WebDriver）"
 on:
   workflow_call:
     inputs:
-      # runner 镜像（U26 迁移完成 2026-10-08：默认钉 26.04——caller 显式传参
-      # 可逐腿覆盖；探针/六腿验证见代码仓 ubuntu26-probe/ubuntu26-validate）
+      # runner 镜像（U26 迁移机制：默认钉 24.04 行为不变；caller 显式传
+      # ubuntu-26.04 逐腿迁移——探针实测见代码仓 ubuntu26-probe.yml）
       runner:
         type: string
-        default: "ubuntu-26.04"
+        default: "ubuntu-24.04"
       node-version:
         type: string
         default: "24"
@@ -30,7 +30,7 @@ permissions:
 jobs:
   firefox:
     name: firefox (node ${{ inputs.node-version }})
-    runs-on: ${{ inputs.runner }}   # 默认 26.04（U26 迁移完成 2026-10-08；caller runner input 可逐腿覆盖）
+    runs-on: ${{ inputs.runner }}   # 默认 24.04（U26 迁移经 caller runner input 逐腿切）
     timeout-minutes: 60
     env:
       NODE: node
