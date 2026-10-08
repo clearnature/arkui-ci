@@ -62,9 +62,10 @@ ghcup/bindist 安装的 GHC 包库文件名含发行特有的 ABI tag
 
 ## 6. runner 钉版
 
-`ubuntu-24.04`（2026-10-02 全矩阵实测校准）。ubuntu-latest 将于
-2026-10-19 迁 Ubuntu 26——26 的适配（包名/预装变化）作为独立验证切片，
-验证绿之前不随 latest 漂移。
+`ubuntu-26.04`（U26 迁移完成 2026-10-08：探针 ubuntu26-probe 扫环境面 +
+六腿全量真跑 ubuntu26-validate 绿 + 主仓 ci.yml 六腿显式传参在 26.04 全绿
+多日；原 24.04 钉版段留档见 git 历史。ubuntu-latest 2026-10-19 迁 Ubuntu 26
+前完成——本仓默认钉版不随 latest 漂移，但已先行钉到 26）。
 
 Windows 腿（`browser-windows.yml`）用 `windows-latest`：Chrome 依赖
 runner 镜像预装（`C:\Program Files\Google\Chrome\Application\chrome.exe`），
