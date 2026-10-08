@@ -22,7 +22,7 @@ permissions:
 jobs:
   firefox:
     name: firefox (node ${{ inputs.node-version }})
-    runs-on: ubuntu-24.04   # 钉 24.04（同家族理由）
+    runs-on: ubuntu-26.04   # U26 迁移完成（2026-10-08；原钉 24.04 同家族裁定已过期）
     timeout-minutes: 60
     env:
       NODE: node
