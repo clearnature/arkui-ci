@@ -10,7 +10,7 @@ on:
         default: "ubuntu-26.04"
       node-version:
         type: string
-        default: "24"
+        default: "26"
       electron-version:
         description: "Electron 版本（npm 分发版）"
         type: string
@@ -43,6 +43,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
+      - name: 工具链基线（pnpm 12 + TypeScript 7.1）
+        run: |
+          npm i -g --allow-scripts=pnpm pnpm@12.18.0 typescript@7.1.0-beta
+          echo "node $(node -v) | pnpm $(pnpm -v) | tsc $(tsc -v)"
       - name: 基线（xvfb + metacity 窗管 + Electron 运行库 + 字体对齐）
         run: |
           sudo apt-get update -qq

@@ -12,7 +12,7 @@ on:
     inputs:
       node-version:
         type: string
-        default: "24"
+        default: "26"
 
 permissions:
   contents: read
@@ -31,6 +31,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ inputs.node-version }}
+      - name: 工具链基线（pnpm 12 + TypeScript 7.1）
+        run: |
+          npm i -g --allow-scripts=pnpm pnpm@12.18.0 typescript@7.1.0-beta
+          echo "node $(node -v) | pnpm $(pnpm -v) | tsc $(tsc -v)"
       - name: Python + playwright + WebKitGTK（版本钉 1.63.0=本地同款）
         run: |
           python3 -m pip install --user --break-system-packages playwright==1.63.0

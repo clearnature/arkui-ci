@@ -10,7 +10,7 @@ on:
         default: "ubuntu-26.04"
       node-version:
         type: string
-        default: "24"
+        default: "26"
       setup-command:
         description: "环境准备命令（字体/依赖等，多行 shell 可用）"
         type: string
@@ -40,6 +40,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
+      - name: 工具链基线（pnpm 12 + TypeScript 7.1）
+        run: |
+          npm i -g --allow-scripts=pnpm pnpm@12.18.0 typescript@7.1.0-beta
+          echo "node $(node -v) | pnpm $(pnpm -v) | tsc $(tsc -v)"
       - name: 基线（Chrome 预装确认 + 字体对齐）
         run: |
           test -x "$CHROME" || { echo "❌ 未找到 $CHROME"; exit 1; }

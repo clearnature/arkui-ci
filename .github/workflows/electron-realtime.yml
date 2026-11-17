@@ -23,7 +23,7 @@ on:
         default: "ubuntu-26.04"
       node-version:
         type: string
-        default: "24"
+        default: "26"
 
 permissions:
   contents: read
@@ -45,6 +45,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ inputs.node-version }}
+      - name: 工具链基线（pnpm 12 + TypeScript 7.1）
+        run: |
+          npm i -g --allow-scripts=pnpm pnpm@12.18.0 typescript@7.1.0-beta
+          echo "node $(node -v) | pnpm $(pnpm -v) | tsc $(tsc -v)"
       - name: 系统依赖（Electron 运行库 + 字体对齐 + metacity 窗管 + xvfb）
         run: |
           sudo apt-get update -qq

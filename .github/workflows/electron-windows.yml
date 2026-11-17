@@ -35,7 +35,7 @@ on:
     inputs:
       node-version:
         type: string
-        default: "24"
+        default: "26"
       electron-version:
         description: "Electron 版本（npm 分发版）"
         type: string
@@ -73,6 +73,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
+      - name: 工具链基线（pnpm 12 + TypeScript 7.1）
+        run: |
+          npm i -g --allow-scripts=pnpm pnpm@12.18.0 typescript@7.1.0-beta
+          echo "node $(node -v) | pnpm $(pnpm -v) | tsc $(tsc -v)"
       - name: 基线（无系统运行库段——自包含）+ 安装 Electron
         run: |
           # 基线即安装：Windows 无 xvfb/metacity/字体/运行库段（见文件头说明），
