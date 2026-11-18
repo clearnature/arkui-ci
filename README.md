@@ -25,6 +25,25 @@ runner 环境 + 治理语义（两级门/留档/并发）】，项目差异全�
 | `kernel-compilers.yml` | 五语言编译器（gcc/go/rust/ghc/cjc） | —（自包含） |
 | `pr-gate.yml` | PR 前置门（body 声明检查 + 快检） | pr-number / pr-body |
 
+## 工具链基线（所有 reusable 腿统一供给）
+
+每个含 `setup-node` 的 workflow 在 node 就绪后执行同一步「工具链基线」：
+
+```yaml
+      - name: 工具链基线（pnpm 12 + TypeScript 7.1）
+        run: |
+          npm i -g --allow-scripts=pnpm pnpm@12.18.0 typescript@7.1.0-beta
+          echo "node $(node -v) | pnpm $(pnpm -v) | tsc $(tsc -v)"
+```
+
+| 组件 | 版本 | 说明 |
+|---|---|---|
+| node | **26**（`inputs.node-version` 默认值） | 26 于 2026-10-28 进 Active LTS；24 已转 Maintenance。`typescript@7.1` 的 `engines.node` 是 `>=16.20.0`、pnpm 12 无 engines，二者都不构成约束，选 26 是为了 LTS 与两端版本一致 |
+| pnpm | `12.18.0` | 装上即用；`--allow-scripts=pnpm` 是 npm 12 的必需开关（否则 pnpm 的 install script 被拦，只剩 mjs 回退壳） |
+| TypeScript | `7.1.0-beta` | 原生（Go）编译器，`tsc` 在 PATH 上即可用。项目侧若要 4.9.5 语义的类型检查，仍应显式钉自己的副本，不要依赖 PATH |
+
+版本改动只需改这一步（一处），使用方 bump `@SHA` 后自动获得；项目专属的额外工具仍走 `setup-command`。
+
 ## 使用（项目侧薄委托示例）
 
 ```yaml

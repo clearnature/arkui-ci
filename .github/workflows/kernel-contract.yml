@@ -10,7 +10,7 @@ on:
         default: "ubuntu-26.04"
       node-version:
         type: string
-        default: "24"
+        default: "26"
 
 permissions:
   contents: read
@@ -28,6 +28,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
+      - name: 工具链基线（pnpm 12 + TypeScript 7.1）
+        run: |
+          npm i -g --allow-scripts=pnpm pnpm@12.18.0 typescript@7.1.0-beta
+          echo "node $(node -v) | pnpm $(pnpm -v) | tsc $(tsc -v)"
       - name: 内核 .so 在位确认
         run: |
           for k in c-sample/libkernel_c.so go/libkernel_go.so rust/libkernel_rs.so; do

@@ -33,7 +33,7 @@ on:
     inputs:
       node-version:
         type: string
-        default: "24"
+        default: "26"
       playwright-version:
         description: "playwright 版本（Windows 上决定 Win32 口味 WebKit 构建，建议与本地验证环境同版）"
         type: string
@@ -71,6 +71,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
+      - name: 工具链基线（pnpm 12 + TypeScript 7.1）
+        run: |
+          npm i -g --allow-scripts=pnpm pnpm@12.18.0 typescript@7.1.0-beta
+          echo "node $(node -v) | pnpm $(pnpm -v) | tsc $(tsc -v)"
       - name: 基线（playwright + Win32 口味 WebKit；无系统依赖段/字体段）
         run: |
           # python -m pip（Windows 用法）；无 --user/--break-system-packages——
