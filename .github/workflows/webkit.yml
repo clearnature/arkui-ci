@@ -47,6 +47,9 @@ jobs:
         run: |
           npm i -g --allow-scripts=pnpm pnpm@12.18.0 typescript@7.1.0-beta
           echo "node $(node -v) | pnpm $(pnpm -v) | tsc $(tsc -v)"
+          # 供项目侧定位 TS 7：Windows 上 npm 是 .cmd 垫片，脚本里 spawn 可能探不到，
+          # 所以把路径显式交给后续 step（GitHub 会把它注入该 job 后续步骤的环境）
+          echo "TSC7_PKG=$(npm root -g)/typescript" >> "$GITHUB_ENV"
       - name: 基线（playwright + WebKitGTK + 字体对齐）
         run: |
           python3 -m pip install --user --break-system-packages playwright==${{ inputs.playwright-version }}
