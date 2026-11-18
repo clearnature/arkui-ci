@@ -41,10 +41,12 @@ jobs:
       #     setup-cangjie 的 `channel: nightly` 必然失败（实测 "Version ... not found in any channel"）
       #   · 官方每日发行在 https://gitcode.com/Cangjie/nightly_build/releases，tag 即版本号，
       #     资产名 cangjie-sdk-linux-x64-<tag>.tar.gz（api/v5 可列举资产与大小）
-      # 版本钉 20261025（已实测能完整编译 kernel/cangjie/src/kernel.cj，130,288 B）：
-      #   ⚠ 20261113 起 nightly 的 `@C` 导出会让编译器 ICE（std::bad_variant_access / 信号 6），
-      #     最小复现是三行 `@C public func f(a: Int64): Int64 { a }`；1025 与 0919 正常。
-      #     升级前必须先拿 kernel/cangjie/src/kernel.cj 试编，再更新下面的 sha256。
+      # 版本钉 20261025（实测可完整编译 kernel/cangjie/src/kernel.cj 并跑通 41 断言契约）：
+      #   ⚠ 曾观察到 20261113+ 试编出现间歇性 ICE（std::bad_variant_access / 信号 6），
+      #     但 2026-11-18 复测**无法复现**：同一命令连跑 30 次全成功，20261118 也能完整
+      #     编译内核并通过契约（缺 CANGJIE_HOME、输出已存在、刚写入源文件等假设逐一排除）。
+      #     故此处**不宣称"某版本必崩"**，只保留操作纪律：
+      #     升级前先拿 kernel/cangjie/src/kernel.cj 试编 + 跑一次契约，通过后再改 sha256。
       - name: Setup Cangjie（nightly 20261025，gitcode release 直取 + sha256）
         env:
           CJ_VER: "1.3.0-alpha.20261025001053"
